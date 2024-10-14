@@ -217,6 +217,13 @@ harness = false
 required-features = ["enable-benches"]
 
 [[bench]]
+name = "criterion_decrypt"
+path = "benches/ct/decrypt.rs"
+harness = false
+required-features = ["enable-benches"]
+
+
+[[bench]]
 name = "iai_arithmetic"
 path = "benches/iai/arithmetic_circuit.rs"
 harness = false
