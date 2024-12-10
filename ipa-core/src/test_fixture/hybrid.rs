@@ -1,4 +1,4 @@
-use std::{collections::HashMap, iter::zip};
+use std::{borrow::Borrow, collections::HashMap, iter::zip};
 
 use crate::{
     ff::{
@@ -230,16 +230,19 @@ impl MatchEntry {
 /// # Panics
 /// It won't, so long as you can convert a u32 to a usize
 #[must_use]
-pub fn hybrid_in_the_clear(input_rows: &[TestHybridRecord], max_breakdown: usize) -> Vec<u32> {
+pub fn hybrid_in_the_clear<I: IntoIterator<Item: Borrow<TestHybridRecord>>>(
+    input_rows: I,
+    max_breakdown: usize,
+) -> Vec<u32> {
     let mut attributed_conversions = HashMap::<u64, MatchEntry>::new();
     for input in input_rows {
-        match input {
-            TestHybridRecord::TestConversion { match_key, .. }
-            | TestHybridRecord::TestImpression { match_key, .. } => {
+        match input.borrow() {
+            r @ (TestHybridRecord::TestConversion { match_key, .. }
+            | TestHybridRecord::TestImpression { match_key, .. }) => {
                 attributed_conversions
                     .entry(*match_key)
-                    .and_modify(|e| e.add_record(input.clone()))
-                    .or_insert(MatchEntry::Single(input.clone()));
+                    .and_modify(|e| e.add_record(r.clone()))
+                    .or_insert(MatchEntry::Single(r.clone()));
             }
         }
     }
