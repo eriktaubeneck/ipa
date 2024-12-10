@@ -235,30 +235,43 @@ pub fn hybrid_in_the_clear<I: IntoIterator<Item: Borrow<TestHybridRecord>>>(
     max_breakdown: usize,
 ) -> Vec<u32> {
     let mut attributed_conversions = HashMap::<u64, MatchEntry>::new();
+    let mut output = vec![0; max_breakdown];
+    let mut current_key: Option<u64> = None;
+    let mut current_entry: Option<MatchEntry> = None;
     for input in input_rows {
         if attributed_conversions.len() % 1_000_000 == 0 {
-            tracing::info!("crossed another 1M rows: {}", attributed_conversions.len() / 1_000_000);
+            tracing::info!(
+                "crossed another 1M rows: {}",
+                attributed_conversions.len() / 1_000_000
+            );
         }
         match input.borrow() {
             r @ (TestHybridRecord::TestConversion { match_key, .. }
-            | TestHybridRecord::TestImpression { match_key, .. }) => {
-                attributed_conversions
-                    .entry(*match_key)
-                    .and_modify(|e| e.add_record(r.clone()))
-                    .or_insert(MatchEntry::Single(r.clone()));
-            }
+            | TestHybridRecord::TestImpression { match_key, .. }) => match current_key {
+                Some(k) => {
+                    if &k == match_key {
+                        match current_entry {
+                            Some(mut e) => e.add_record(r.clone()),
+                            None => current_entry = Some(MatchEntry::Single(r.clone())),
+                        }
+                    } else {
+                        match current_entry {
+                            Some(e) => {
+                                let histogram = e.into_breakdown_key_and_value_tuple();
+                                match histogram {
+                                    Some((breakdown_key, value)) => {
+                                        output[usize::try_from(breakdown_key).unwrap()] += value;
+                                    }
+                                    None => {}
+                                }
+                            }
+                            None => {}
+                        }
+                    }
+                }
+                None => current_key = Some(match_key.clone()),
+            },
         }
-    }
-    tracing::info!("done attribution phase");
-
-    let pairs = attributed_conversions
-        .into_values()
-        .filter_map(MatchEntry::into_breakdown_key_and_value_tuple)
-        .collect::<Vec<_>>();
-
-    let mut output = vec![0; max_breakdown];
-    for (breakdown_key, value) in pairs {
-        output[usize::try_from(breakdown_key).unwrap()] += value;
     }
 
     output
