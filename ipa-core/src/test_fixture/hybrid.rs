@@ -236,6 +236,9 @@ pub fn hybrid_in_the_clear<I: IntoIterator<Item: Borrow<TestHybridRecord>>>(
 ) -> Vec<u32> {
     let mut attributed_conversions = HashMap::<u64, MatchEntry>::new();
     for input in input_rows {
+        if attributed_conversions.len() % 1_000_000 == 0 {
+            tracing::info!("crossed another 1M rows: {}", attributed_conversions.len() / 1_000_000);
+        }
         match input.borrow() {
             r @ (TestHybridRecord::TestConversion { match_key, .. }
             | TestHybridRecord::TestImpression { match_key, .. }) => {
@@ -246,6 +249,7 @@ pub fn hybrid_in_the_clear<I: IntoIterator<Item: Borrow<TestHybridRecord>>>(
             }
         }
     }
+    tracing::info!("done attribution phase");
 
     let pairs = attributed_conversions
         .into_values()
