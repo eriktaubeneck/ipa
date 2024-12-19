@@ -16,6 +16,7 @@ use rand::thread_rng;
 use crate::{
     cli::{
         config_parse::HelperNetworkConfigParseExt,
+        crypto::FileFormat,
         playbook::{BreakdownKey, InputSource, TriggerValue},
     },
     config::{KeyRegistries, NetworkConfig},
@@ -55,12 +56,6 @@ pub struct HybridEncryptArgs {
     /// a flag to produce length delimited binary instead of newline delimited hex
     #[arg(long)]
     length_delimited: bool,
-}
-
-#[derive(Copy, Clone)]
-enum FileFormat {
-    LengthDelimitedBinary,
-    NewlineDelimitedHex,
 }
 
 impl HybridEncryptArgs {

@@ -7,12 +7,14 @@ use std::{
 use clap::Parser;
 
 use crate::{
+    cli::crypto::FileFormat,
     config::{hpke_registry, HpkeServerConfig},
     error::BoxError,
     ff::{
         boolean_array::{BA3, BA8},
         U128Conversions,
     },
+    helpers::LengthDelimitedStream,
     hpke::{KeyRegistry, PrivateKeyOnly},
     report::hybrid::{EncryptedHybridReport, HybridReport},
     test_fixture::Reconstruct,
@@ -49,6 +51,10 @@ pub struct HybridDecryptArgs {
     /// The destination file for decrypted output.
     #[arg(long, value_name = "FILE")]
     output_file: PathBuf,
+
+    /// a flag to signal reading length delimited binary instead of newline delimited hex
+    #[arg(long)]
+    length_delimited: bool,
 }
 
 impl HybridDecryptArgs {
@@ -61,6 +67,7 @@ impl HybridDecryptArgs {
         mk_private_key2: &Path,
         mk_private_key3: &Path,
         output_file: &Path,
+        length_delimited: bool,
     ) -> Self {
         Self {
             input_file1: input_file1.to_path_buf(),
@@ -70,6 +77,15 @@ impl HybridDecryptArgs {
             input_file3: input_file3.to_path_buf(),
             mk_private_key3: mk_private_key3.to_path_buf(),
             output_file: output_file.to_path_buf(),
+            length_delimited,
+        }
+    }
+
+    fn file_format(&self) -> FileFormat {
+        if self.length_delimited {
+            FileFormat::LengthDelimitedBinary
+        } else {
+            FileFormat::NewlineDelimitedHex
         }
     }
 
@@ -86,6 +102,7 @@ impl HybridDecryptArgs {
             input_file3,
             mk_private_key3,
             output_file,
+            length_delimited,
         } = self;
         let key_registry1 = build_hpke_registry(mk_private_key1).await?;
         let key_registry2 = build_hpke_registry(mk_private_key2).await?;
@@ -166,12 +183,41 @@ impl HybridDecryptArgs {
     }
 }
 
-struct DecryptedHybridReports {
+struct LengthDelimitedBinaryReports {
+    stream: LengthDelimitedStream<EncryptedHybridReport<BA8, BA3>, _>,
+}
+
+impl Iterator for LengthDelimitedBinaryReports {
+    type Item = HybridReport<BA8, BA3>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.stream.next()
+    }
+}
+
+impl LengthDelimitedBinaryReports {
+    fn new(filename: &PathBuf, key_registry: KeyRegistry<PrivateKeyOnly>) -> Self {
+        let file = File::open(filename)
+            .unwrap_or_else(|e| panic!("unable to open file {filename:?}. {e}"));
+        let reader = BufReader::new(file);
+        let stream = LengthDelimitedStream::<EncryptedHybridReport<BA8, BA3>, _>::new(self.reader)
+            .map_err(Into::<Error>::into)
+            .map_ok(|enc_report| {
+                let dec_report: HybridReport<BA8, BA3> =
+                    enc_report.decrypt(&self.key_registry).unwrap();
+                Some(dec_report)
+            });
+
+        Self { stream }
+    }
+}
+
+struct NewlineDelimitedHexReports {
     reader: BufReader<File>,
     key_registry: KeyRegistry<PrivateKeyOnly>,
 }
 
-impl Iterator for DecryptedHybridReports {
+impl Iterator for NewlineDelimitedHexReports {
     type Item = HybridReport<BA8, BA3>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -189,7 +235,7 @@ impl Iterator for DecryptedHybridReports {
     }
 }
 
-impl DecryptedHybridReports {
+impl NewlineDelimitedHexReport {
     fn new(filename: &PathBuf, key_registry: KeyRegistry<PrivateKeyOnly>) -> Self {
         let file = File::open(filename)
             .unwrap_or_else(|e| panic!("unable to open file {filename:?}. {e}"));

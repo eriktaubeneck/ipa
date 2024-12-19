@@ -8,6 +8,12 @@ pub use encrypt::EncryptArgs;
 pub use hybrid_decrypt::HybridDecryptArgs;
 pub use hybrid_encrypt::HybridEncryptArgs;
 
+#[derive(Copy, Clone)]
+pub enum FileFormat {
+    LengthDelimitedBinary,
+    NewlineDelimitedHex,
+}
+
 #[cfg(test)]
 mod sample_data {
     use std::{io, io::Write, sync::OnceLock};
